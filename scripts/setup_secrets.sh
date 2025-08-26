@@ -17,7 +17,8 @@ generate_password() {
 }
 
 # Generate passwords
-REDIS_PASSWORD=$(generate_password)
+REDIS_VALIDATOR_PASSWORD=$(generate_password)
+REDIS_MANAGER_PASSWORD=$(generate_password)
 ADMIN_SECRET=$(generate_password)
 
 echo ""
@@ -45,7 +46,8 @@ else
 fi
 
 # Update passwords in .env file
-sed -i.tmp "s/REDIS_PASSWORD=.*/REDIS_PASSWORD=$REDIS_PASSWORD/" "$ENV_FILE"
+sed -i.tmp "s/REDIS_VALIDATOR_PASSWORD=.*/REDIS_VALIDATOR_PASSWORD=$REDIS_VALIDATOR_PASSWORD/" "$ENV_FILE"
+sed -i.tmp "s/REDIS_MANAGER_PASSWORD=.*/REDIS_MANAGER_PASSWORD=$REDIS_MANAGER_PASSWORD/" "$ENV_FILE"
 sed -i.tmp "s/ADMIN_SECRET=.*/ADMIN_SECRET=$ADMIN_SECRET/" "$ENV_FILE"
 rm "$ENV_FILE.tmp"
 
@@ -72,18 +74,21 @@ else
     echo "💾 Created backup of existing redis_users.acl file"
 fi
 
-# Update password in ACL file
-sed -i.tmp "s/>CHANGE_ME_GENERATE_SECURE_PASSWORD/>$REDIS_PASSWORD/" "$ACL_FILE"
+# Update passwords in ACL file
+sed -i.tmp "s/>CHANGE_ME_GENERATE_SECURE_VALIDATOR_PASSWORD/>$REDIS_VALIDATOR_PASSWORD/" "$ACL_FILE"
+sed -i.tmp "s/>CHANGE_ME_GENERATE_SECURE_MANAGER_PASSWORD/>$REDIS_MANAGER_PASSWORD/" "$ACL_FILE"
+sed -i.tmp "s/>VALIDATOR_PASSWORD_PLACEHOLDER/>$REDIS_VALIDATOR_PASSWORD/" "$ACL_FILE"
 rm "$ACL_FILE.tmp"
 
-echo "✅ Updated redis_users.acl file with secure password"
+echo "✅ Updated redis_users.acl file with secure passwords"
 
 echo ""
 echo "🎉 Setup complete!"
 echo ""
 echo "📋 Configuration Summary:"
 echo "========================"
-echo "Redis Manager Password: $REDIS_PASSWORD"
+echo "Redis Validator Password: $REDIS_VALIDATOR_PASSWORD"
+echo "Redis Manager Password: $REDIS_MANAGER_PASSWORD"
 echo "Admin Secret: $ADMIN_SECRET"
 echo ""
 echo "🚀 Next steps:"

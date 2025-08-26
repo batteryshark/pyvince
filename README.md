@@ -244,11 +244,13 @@ Health check endpoint.
 ### Environment Variables
 
 ```bash
-# Redis Configuration
+# Redis Configuration (Role-Based Access)
 REDIS_HOST=localhost
 REDIS_PORT=6379
-REDIS_PASSWORD=your_secure_password
-REDIS_USERNAME=manager
+REDIS_VALIDATOR_PASSWORD=your_secure_validator_password  # Read-only user for validation
+REDIS_MANAGER_PASSWORD=your_secure_manager_password      # Read-write user for admin ops
+REDIS_VALIDATOR_USERNAME=validator
+REDIS_MANAGER_USERNAME=manager
 REDIS_DB=0
 
 # Admin Authentication
@@ -269,11 +271,27 @@ PORT=8000
 ./scripts/setup_secrets.sh
 ```
 
-This creates a `manager` user with limited permissions:
-- JSON operations on key patterns
-- Stream operations for audit logs
-- Basic operations for rate limiting
-- No access to dangerous commands
+This creates **two separate Redis users with role-based permissions**:
+
+#### 🔐 **Validator User** (Read-Only for Validation)
+- **Purpose**: Used only for `/v1/validate-key` endpoint
+- **Permissions**: JSON read, audit logging, rate limiting
+- **Key patterns**: `apikey:*`, `apimeta:*`, `audit:*`, `ratelimit:*`
+- **Commands**: `json.get`, `incr`, `expire`, `xadd`, `hset`, `hincrby`
+- **Cannot**: Create, modify, or delete API keys
+
+#### 👑 **Manager User** (Read-Write for Admin Operations)  
+- **Purpose**: Used for `/v1/mint-key`, `/v1/revoke-key`, `/v1/list-keys`, admin endpoints
+- **Permissions**: Full CRUD operations on all key patterns
+- **Key patterns**: `apikey:*`, `project:*`, `apiprojectkeys:*`, `apimeta:*`, `audit:*`, `ratelimit:*`
+- **Commands**: All JSON, set, stream, hash operations
+- **Can**: Create, modify, revoke, and list API keys
+
+#### 🛡️ **Security Benefits**
+- **Principle of least privilege**: Each operation uses minimal required permissions
+- **Breach containment**: Compromised validation credentials cannot modify keys
+- **Database-level enforcement**: Security handled by Redis ACL, not application code
+- **Audit separation**: Clear distinction between read and write operations
 
 ### Multi-Client Deployment with Redis ACL
 

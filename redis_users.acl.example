@@ -1,1 +1,3 @@
-user manager on >CHANGE_ME_GENERATE_SECURE_PASSWORD ~apikey:* ~apiprojectkeys:* ~apimeta:* ~project:* ~audit:* ~ratelimit:* ~temp:* +@read +@write +@keyspace +@stream +@hash +@set +@string +@connection +@transaction +json.set +json.get +json.del +json.type +json.resp
+user validator on >CHANGE_ME_GENERATE_SECURE_VALIDATOR_PASSWORD ~apikey:* ~apimeta:* ~audit:* ~ratelimit:* +@connection +@stream +@hash +@string +json.get +incr +expire +xadd +hset +hincrby
+
+user manager on >CHANGE_ME_GENERATE_SECURE_MANAGER_PASSWORD ~apikey:* ~apiprojectkeys:* ~apimeta:* ~project:* ~audit:* ~ratelimit:* ~temp:* +@read +@write +@keyspace +@stream +@hash +@set +@string +@connection +@transaction +json.set +json.get +json.del +json.type +json.resp +sadd +smembers +incr +expire +xadd +hset +hincrby

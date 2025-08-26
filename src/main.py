@@ -37,8 +37,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# Global Redis client
-redis_client: Optional[RedisKeyManager] = None
+# Global Redis clients - separate for validation vs admin operations
+redis_validator: Optional[RedisKeyManager] = None  # Read-only for /v1/validate-key
+redis_admin: Optional[RedisKeyManager] = None     # Read-write for admin operations
 
 # Admin authentication
 ADMIN_SECRET = os.getenv("ADMIN_SECRET")
@@ -48,26 +49,38 @@ security = HTTPBearer(auto_error=False)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    global redis_client
+    global redis_validator, redis_admin
     
     # Startup
     logger.info("Starting API Key Manager")
     
-    # Initialize Redis client
-    redis_client = RedisKeyManager(
+    # Initialize Redis clients with different permissions
+    redis_validator = RedisKeyManager(
         host=os.getenv("REDIS_HOST", "localhost"),
         port=int(os.getenv("REDIS_PORT", "6379")),
-        password=os.getenv("REDIS_PASSWORD"),
-        username=os.getenv("REDIS_USERNAME"),
+        password=os.getenv("REDIS_VALIDATOR_PASSWORD"),
+        username=os.getenv("REDIS_VALIDATOR_USERNAME", "validator"),
         db=int(os.getenv("REDIS_DB", "0"))
     )
     
-    # Test Redis connection
-    if not redis_client.ping():
-        logger.error("Failed to connect to Redis")
-        raise RuntimeError("Redis connection failed")
+    redis_admin = RedisKeyManager(
+        host=os.getenv("REDIS_HOST", "localhost"),
+        port=int(os.getenv("REDIS_PORT", "6379")),
+        password=os.getenv("REDIS_MANAGER_PASSWORD"),
+        username=os.getenv("REDIS_MANAGER_USERNAME", "manager"),
+        db=int(os.getenv("REDIS_DB", "0"))
+    )
     
-    logger.info("Successfully connected to Redis")
+    # Test Redis connections
+    if not redis_validator.ping():
+        logger.error("Failed to connect to Redis with validator credentials")
+        raise RuntimeError("Redis validator connection failed")
+    
+    if not redis_admin.ping():
+        logger.error("Failed to connect to Redis with admin credentials")
+        raise RuntimeError("Redis admin connection failed")
+    
+    logger.info("Successfully connected to Redis with both validator and admin credentials")
     
     # Check admin secret configuration
     if not ADMIN_SECRET:
@@ -143,7 +156,7 @@ async def verify_admin_auth(credentials: Optional[HTTPAuthorizationCredentials] 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    if not redis_client or not redis_client.ping():
+    if not redis_validator or not redis_validator.ping():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Redis connection failed"
@@ -161,8 +174,8 @@ async def validate_key(request: ValidateKeyRequest):
     and retrieving the associated metadata for routing or other purposes.
     """
     try:
-        # Validate the API key
-        api_key_doc = await redis_client.validate_api_key(request.api_key)
+        # Validate the API key (using read-only client)
+        api_key_doc = await redis_validator.validate_api_key(request.api_key)
         
         if api_key_doc is None:
             return create_error_response(
@@ -214,8 +227,8 @@ async def mint_key(request: MintKeyRequest, _: bool = Depends(verify_admin_auth)
             expires_at=request.expires_at
         )
         
-        # Store in Redis
-        if not await redis_client.store_api_key(api_key_doc):
+        # Store in Redis (using admin client)
+        if not await redis_admin.store_api_key(api_key_doc):
             return create_error_response(
                 code="storage_error",
                 message="Failed to store API key",
@@ -252,7 +265,7 @@ async def revoke_key(request: RevokeKeyRequest, _: bool = Depends(verify_admin_a
     """
     try:
         # Check if key exists
-        api_key_doc = await redis_client.get_api_key(request.project_id, request.key_id)
+        api_key_doc = await redis_admin.get_api_key(request.project_id, request.key_id)
         if api_key_doc is None:
             return create_error_response(
                 code="key_not_found",
@@ -260,8 +273,8 @@ async def revoke_key(request: RevokeKeyRequest, _: bool = Depends(verify_admin_a
                 status_code=status.HTTP_404_NOT_FOUND
             )
         
-        # Revoke the key
-        if not await redis_client.revoke_api_key(request.project_id, request.key_id):
+        # Revoke the key (using admin client)
+        if not await redis_admin.revoke_api_key(request.project_id, request.key_id):
             return create_error_response(
                 code="revocation_error",
                 message="Failed to revoke API key",
@@ -295,7 +308,7 @@ async def list_keys(
     """
     try:
         # Retrieve API keys for the project
-        api_key_docs = await redis_client.list_project_keys(project_id, offset, limit)
+        api_key_docs = await redis_admin.list_project_keys(project_id, offset, limit)
         
         # Convert to metadata format (without secrets)
         items = []
@@ -343,8 +356,8 @@ async def create_project(
     Creates a new project that can contain API keys.
     """
     try:
-        # Check if project already exists
-        existing_project = await redis_client.get_project(project_id)
+        # Check if project already exists (using admin client)
+        existing_project = await redis_admin.get_project(project_id)
         if existing_project:
             return create_error_response(
                 code="project_exists",
@@ -361,8 +374,8 @@ async def create_project(
             created_at=current_time
         )
         
-        # Store in Redis
-        if not await redis_client.store_project(project_doc):
+        # Store in Redis (using admin client)
+        if not await redis_admin.store_project(project_doc):
             return create_error_response(
                 code="storage_error",
                 message="Failed to create project",
@@ -388,7 +401,7 @@ async def get_project(project_id: str, _: bool = Depends(verify_admin_auth)):
     Get project information (admin operation).
     """
     try:
-        project_doc = await redis_client.get_project(project_id)
+        project_doc = await redis_admin.get_project(project_id)
         if project_doc is None:
             return create_error_response(
                 code="project_not_found",

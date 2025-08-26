@@ -70,9 +70,10 @@ This design keeps the service generic and adaptable to any use case while mainta
    docker-compose up -d
    ```
 
-3. **Setup Redis ACL** (production):
+3. **Setup Redis ACL** (REQUIRED for production):
    ```bash
-   ./setup_redis_acl.sh
+   # This step is MANDATORY - do not skip!
+   ./scripts/setup_secrets.sh
    ```
 
 4. **Test the API**:
@@ -261,10 +262,11 @@ PORT=8000
 
 ### Redis ACL Setup
 
-For production, create a restricted Redis user:
+**CRITICAL SECURITY REQUIREMENT**: For production, you MUST create secure Redis credentials:
 
 ```bash
-./setup_redis_acl.sh
+# Generate secure credentials (REQUIRED before first run)
+./scripts/setup_secrets.sh
 ```
 
 This creates a `manager` user with limited permissions:
@@ -459,8 +461,10 @@ After running the setup scripts, your `.env` file will contain:
 
 ### Production Checklist
 
-- [ ] Run `./scripts/setup_secrets.sh` to generate secure secrets
-- [ ] Secure the `.env` file with appropriate permissions
+- [ ] **🚨 CRITICAL**: Run `./scripts/setup_secrets.sh` to generate secure secrets
+- [ ] **🚨 CRITICAL**: Verify no default/placeholder passwords remain in configuration (such as `user default on >defaultpass ~* +@all`)
+- [ ] **🚨 CRITICAL**: Ensure Redis is not publicly accessible (firewall/VPC)
+- [ ] Secure the `.env` file with appropriate permissions (600)
 - [ ] Configure Redis with AOF/RDB persistence
 - [ ] Set up Redis ACL with restricted user
 - [ ] Enable TLS for Redis connections

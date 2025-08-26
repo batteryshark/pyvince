@@ -1,2 +1,1 @@
-user default on >defaultpass ~* +@all
 user manager on >CHANGE_ME_GENERATE_SECURE_PASSWORD ~apikey:* ~apiprojectkeys:* ~apimeta:* ~project:* ~audit:* ~ratelimit:* ~temp:* +@read +@write +@keyspace +@stream +@hash +@set +@string +@connection +@transaction +json.set +json.get +json.del +json.type +json.resp
